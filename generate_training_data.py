@@ -8,6 +8,9 @@ import numpy as np
 import os
 import pandas as pd
 
+my_dir = 'data\PEMS-BAY'
+my_data_name = "data\pems-bay.h5"
+
 
 def generate_graph_seq2seq_io_data(
         df, x_offsets, y_offsets, add_time_in_day=True, add_day_in_week=False, scaler=None
@@ -111,12 +114,12 @@ def main(args):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument(
-        "--output_dir", type=str, default="data/", help="Output directory."
+        "--output_dir", type=str, default=my_dir, help="Output directory."
     )
     parser.add_argument(
         "--traffic_df_filename",
         type=str,
-        default="data/metr-la.h5",
+        default=my_data_name,
         help="Raw traffic readings.",
     )
     args = parser.parse_args()

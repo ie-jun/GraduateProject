@@ -13,8 +13,9 @@ Download the METR-LA and PEMS-BAY dataset from [Google Drive](https://drive.goog
 
 ```
 
-# Create data directories
-mkdir -p data/{METR-LA,PEMS-BAY}
+# data directories 생성
+mkdir data\METR-LA
+mkdir data\PEMS-BAY  
 
 # METR-LA
 python generate_training_data.py --output_dir=data/METR-LA --traffic_df_filename=data/metr-la.h5

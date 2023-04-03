@@ -319,7 +319,7 @@ class LayerNorm(nn.Module):
 
     def forward(self, input, idx):
         if self.elementwise_affine:
-            return F.layer_norm(input, tuple(input.shape[1:]), self.weight[:,idx,:], self.bias[:,idx,:], self.eps)
+            return F.layer_norm(input, tuple(input.shape[1:]), self.weight[:,idx.long(),:], self.bias[:,idx.long(),:], self.eps)
         else:
             return F.layer_norm(input, tuple(input.shape[1:]), self.weight, self.bias, self.eps)
 
