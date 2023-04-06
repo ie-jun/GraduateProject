@@ -208,12 +208,17 @@ def load_dataset(dataset_dir, batch_size, valid_batch_size= None, test_batch_siz
     data = {}
     for category in ['train', 'val', 'test']:
         cat_data = np.load(os.path.join(dataset_dir, category + '.npz'))
-        data['x_' + category] = cat_data['x']
-        data['y_' + category] = cat_data['y']
+        data['x_' + category] = cat_data['x'].astype(np.float32)
+        data['y_' + category] = cat_data['y'].astype(np.float32)
     scaler = StandardScaler(mean=data['x_train'][..., 0].mean(), std=data['x_train'][..., 0].std())
     # Data format
     for category in ['train', 'val', 'test']:
         data['x_' + category][..., 0] = scaler.transform(data['x_' + category][..., 0])
+
+    del cat_data
+
+    import gc
+    gc.collect()
 
     data['train_loader'] = DataLoaderM(data['x_train'], data['y_train'], batch_size)
     data['val_loader'] = DataLoaderM(data['x_val'], data['y_val'], valid_batch_size)
@@ -295,7 +300,11 @@ def normal_std(x):
 
 def write_csv(path_name, file_name, data, columns= None):
     os.makedirs(path_name, exist_ok= True)
-    log_file= os.path.join(path_name, file_name)
+    log_file= path_name + '/' + file_name
+
+    if os.path.exists(log_file):
+        os.remove(log_file)
+
     with open(log_file, 'w', newline= '') as f:
         wr = csv.writer(f)
         n = len(data) # f: n x p numpy data

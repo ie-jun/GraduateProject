@@ -6,16 +6,23 @@ from util import *
 from trainer import Trainer
 from net import gtnet
 
-my_train = True
-my_data = 'data\METR-LA'
-my_num_node = 207 # METR-LA is 207, PEMS-BAY is 325.
+# Change below when you change your dataset.
+my_num_node = 325 # METR-LA is 207, PEMS-BAY is 325.
+my_save_path = './save/PEMS-BAY' # save path of model's parameters
+my_result_path = './save/result/PEMS-BAY' # save path of results
+my_data = 'data/PEMS-BAY'
+my_adj_data = 'data/sensor_graph/adj_mx_bay.pkl' # adj_mx.pkl or adj_mx_bay.pkl
+my_print_every = 50
+my_train = False
+my_data_name = 'PEMS-BAY'
+
 my_epochs = 10
-my_save_path = './save/METR-LA' # save path of model's parameters
-my_result_path = './save/result/METR-LA' # save path of results
-my_runs = 3
+my_runs = 10
 my_topk = 20
 my_seq_in_len = 12
 my_seq_out_len = 12
+my_batch_size =64
+
 def str_to_bool(value):
     if isinstance(value, bool):
         return value
@@ -32,7 +39,7 @@ parser.add_argument('--train', type=str_to_bool, default=my_train ,help='whether
 parser.add_argument('--device',type=str,default='cuda',help='')
 parser.add_argument('--data',type=str,default=my_data,help='data path')
 
-parser.add_argument('--adj_data', type=str,default='data/sensor_graph/adj_mx.pkl',help='adj data path')
+parser.add_argument('--adj_data', type=str,default=my_adj_data,help='adj data path')
 parser.add_argument('--gcn_true', type=str_to_bool, default=True, help='whether to add graph convolution layer')
 parser.add_argument('--buildA_true', type=str_to_bool, default=True,help='whether to construct adaptive adjacency matrix')
 parser.add_argument('--load_static_feature', type=str_to_bool, default=False, help='whether to load static feature')
@@ -56,7 +63,7 @@ parser.add_argument('--seq_in_len',type=int,default=my_seq_in_len,help='input se
 parser.add_argument('--seq_out_len',type=int,default=my_seq_out_len,help='output sequence length')
 
 parser.add_argument('--layers',type=int,default=3,help='number of layers')
-parser.add_argument('--batch_size',type=int,default=64,help='batch size')
+parser.add_argument('--batch_size',type=int,default=my_batch_size,help='batch size')
 parser.add_argument('--learning_rate',type=float,default=0.001,help='learning rate')
 parser.add_argument('--weight_decay',type=float,default=0.0001,help='weight decay rate')
 parser.add_argument('--clip',type=int,default=5,help='clip')
@@ -65,7 +72,7 @@ parser.add_argument('--step_size2',type=int,default=100,help='step_size')
 
 
 parser.add_argument('--epochs',type=int,default=my_epochs ,help='')
-parser.add_argument('--print_every',type=int,default=50,help='')
+parser.add_argument('--print_every',type=int,default=my_print_every,help='')
 parser.add_argument('--seed',type=int,default=101,help='random seed')
 parser.add_argument('--save',type=str,default=my_save_path ,help='save path')
 parser.add_argument('--expid',type=int,default=1,help='experiment id')
@@ -209,7 +216,7 @@ def main(runid):
 
             if mvalid_loss<minl:
                 os.makedirs(args.save, exist_ok=True)
-                torch.save(engine.model.state_dict(), args.save + "exp" + str(args.expid) + "_" + str(runid) +".pth")
+                torch.save(engine.model.state_dict(), args.save + f"/{my_data_name}_exp" + str(args.expid) + "_" + str(runid) +".pth")
                 minl = mvalid_loss
 
         print("Average Training Time: {:.4f} secs/epoch".format(np.mean(train_time)))
@@ -219,7 +226,8 @@ def main(runid):
         bestid = np.argmin(his_valid_loss)
         loss_data = np.concatenate(([his_train_loss],[his_train_mape],[his_train_rmse],[his_valid_loss],[his_valid_mape],[his_valid_rmse]),axis=0).T
         # store every epoch loss
-        write_csv(my_result_path,f'best_loss_run{runid}.csv',loss_data,col_name)
+        datetime = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
+        write_csv(my_result_path,f'best_loss_run{runid}_{datetime}.csv',loss_data,col_name)
 
         print("Training finished")
         print("The valid loss on best model is", str(round(his_valid_loss[bestid],4)))
@@ -227,7 +235,7 @@ def main(runid):
 
     # test
     print("Start testing")
-    engine.model.load_state_dict(torch.load(args.save + "exp" + str(args.expid) + "_" + str(runid) + ".pth"))
+    engine.model.load_state_dict(torch.load(args.save + f"/{my_data_name}_exp" + str(args.expid) + "_" + str(runid) + ".pth"))
 
     # valid data
     outputs = []
@@ -287,7 +295,9 @@ if __name__ == "__main__":
     mae = []
     mape = []
     rmse = []
+
     for i in range(args.runs):
+        print("%d run" % (i + 1))
         vm1, vm2, vm3, m1, m2, m3 = main(i)
         vmae.append(vm1)
         vmape.append(vm2)
@@ -309,19 +319,27 @@ if __name__ == "__main__":
     smape = np.std(mape,axis=0)
     srmse = np.std(rmse,axis=0)
 
-    print('\n\nResults for %d runs\n\n'%args.my_runs)
-    #valid data
+    print('\n\nResults for %d runs\n\n'%args.runs)
+    # valid data
     print('valid\tMAE\tRMSE\tMAPE')
     log = 'mean:\t{:.4f}\t{:.4f}\t{:.4f}'
     print(log.format(np.mean(vmae),np.mean(vrmse),np.mean(vmape)))
     log = 'std:\t{:.4f}\t{:.4f}\t{:.4f}'
     print(log.format(np.std(vmae),np.std(vrmse),np.std(vmape)))
     print('\n\n')
-    #test data
+    # test data
     print('test|horizon\tMAE-mean\tRMSE-mean\tMAPE-mean\tMAE-std\tRMSE-std\tMAPE-std')
     for i in [2,5,11]:
         log = '{:d}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}\t{:.4f}'
         print(log.format(i+1, amae[i], armse[i], amape[i], smae[i], srmse[i], smape[i]))
+
+    # save results
+    result_col_name = ['horizon', 'MAE-mean', 'RMSE-mean', 'MAPE-mean','MAE-std','RMSE-std','MAPE-std']
+    result_data = np.concatenate(([[i for i in range(1,args.seq_out_len+1) ]],[amae],[armse],[amape],[smae],[srmse],[smape]),axis=0).T
+
+    datetime = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
+    write_csv(my_result_path, f'Results_for_{args.runs}runs_test_{datetime}.csv', result_data, result_col_name)
+
 
 
 
