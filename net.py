@@ -2,7 +2,7 @@ from layer import *
 
 
 class gtnet(nn.Module):
-    def __init__(self, gcn_true, buildA_true, gcn_depth, num_nodes, device, predefined_A=None, static_feat=None, dropout=0.3, subgraph_size=20, node_dim=40, dilation_exponential=1, conv_channels=32, residual_channels=32, skip_channels=64, end_channels=128, seq_length=12, in_dim=2, out_dim=12, layers=3, propalpha=0.05, tanhalpha=3, layer_norm_affline=True):
+    def __init__(self, gcn_true, buildA_true, hidden_channels, seq_length, gcn_depth,layer_depth,num_nodes, device, new_graph_learning , predefined_A=None, static_feat=None, dropout=0.3, subgraph_size=20, node_dim=40, dilation_exponential=1, conv_channels=32, residual_channels=32, skip_channels=64, end_channels=128, in_dim=2, out_dim=12, layers=3, propalpha=0.05, tanhalpha=3, layer_norm_affline=True):
         super(gtnet, self).__init__()
         self.gcn_true = gcn_true
         self.buildA_true = buildA_true
@@ -19,7 +19,11 @@ class gtnet(nn.Module):
         self.start_conv = nn.Conv2d(in_channels=in_dim,
                                     out_channels=residual_channels,
                                     kernel_size=(1, 1))
-        self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=tanhalpha, static_feat=static_feat)
+        self.new_graph_learning = new_graph_learning
+        if self.new_graph_learning :
+            self.gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,dilation_exponential,layer_norm_affline)
+        else:
+            self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=propalpha, static_feat=static_feat)
 
         self.seq_length = seq_length
         kernel_size = 7
@@ -87,6 +91,20 @@ class gtnet(nn.Module):
 
 
     def forward(self, input, idx=None):
+
+        if self.gcn_true:
+            if self.buildA_true:
+
+                if self.new_graph_learning:
+                    adp = self.gc(input, self.predefined_A)
+                else:
+                    if idx is None:
+                        adp = self.gc(self.idx)
+                    else:
+                        adp = self.gc(idx)
+            else:
+                adp = self.predefined_A
+
         seq_len = input.size(3)
         assert seq_len==self.seq_length, 'input sequence length not equal to preset sequence length'
 
@@ -95,14 +113,7 @@ class gtnet(nn.Module):
 
 
 
-        if self.gcn_true:
-            if self.buildA_true:
-                if idx is None:
-                    adp = self.gc(self.idx)
-                else:
-                    adp = self.gc(idx)
-            else:
-                adp = self.predefined_A
+
 
         x = self.start_conv(input)
         skip = self.skip0(F.dropout(input, self.dropout, training=self.training))

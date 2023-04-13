@@ -7,17 +7,20 @@ from trainer import Trainer
 from net import gtnet
 
 # Change below when you change your dataset.
-my_num_node = 325 # METR-LA is 207, PEMS-BAY is 325.
-my_save_path = './save/PEMS-BAY' # save path of model's parameters
-my_result_path = './save/result/PEMS-BAY' # save path of results
-my_data = 'data/PEMS-BAY'
-my_adj_data = 'data/sensor_graph/adj_mx_bay.pkl' # adj_mx.pkl or adj_mx_bay.pkl
+my_num_node = 207 # METR-LA is 207, PEMS-BAY is 325.
+my_save_path = './save/METR-LA_new' # save path of model's parameters
+my_result_path = './save/result/METR-LA_new' # save path of results
+my_data = 'data/METR-LA'
+my_adj_data = 'data/sensor_graph/adj_mx.pkl' # adj_mx.pkl or adj_mx_bay.pkl
 my_print_every = 50
-my_train = False
-my_data_name = 'PEMS-BAY'
+my_train = True
+my_data_name = 'METR-LA_new'
+my_new_graph_method = True
+my_layer_depth = 3
+my_hidden_dim = 32
 
-my_epochs = 10
-my_runs = 10
+my_epochs = 30
+my_runs = 1
 my_topk = 20
 my_seq_in_len = 12
 my_seq_out_len = 12
@@ -35,6 +38,10 @@ def str_to_bool(value):
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--train', type=str_to_bool, default=my_train ,help='whether to do training or testing')
+parser.add_argument('--new_graph_learning', type=str_to_bool, default=my_new_graph_method ,help='whether to do new graph learning method or not')
+parser.add_argument('--layer_depth',type=int,default=my_layer_depth,help='depth of new graph learning layer')
+parser.add_argument('--hidden_dim',type=int,default=my_hidden_dim,help='hidden state dimension of new graph learning layer')
+
 
 parser.add_argument('--device',type=str,default='cuda',help='')
 parser.add_argument('--data',type=str,default=my_data,help='data path')
@@ -109,14 +116,22 @@ def main(runid):
     # else:
     #     static_feat = None
 
-    model = gtnet(args.gcn_true, args.buildA_true, args.gcn_depth, args.num_nodes,
-                  device, predefined_A=predefined_A,
+    model = gtnet(gcn_true=args.gcn_true,
+                  buildA_true=args.buildA_true,
+                  gcn_depth= args.gcn_depth,
+                  num_nodes=args.num_nodes,
+                  device =device,
+                  predefined_A=predefined_A,
+                  hidden_channels = args.hidden_dim,
+                  seq_length=  args.seq_in_len,
+                  layer_depth = args.layer_depth,
                   dropout=args.dropout, subgraph_size=args.subgraph_size,
                   node_dim=args.node_dim,
+                  new_graph_learning=args.new_graph_learning,
                   dilation_exponential=args.dilation_exponential,
                   conv_channels=args.conv_channels, residual_channels=args.residual_channels,
                   skip_channels=args.skip_channels, end_channels= args.end_channels,
-                  seq_length=args.seq_in_len, in_dim=args.in_dim, out_dim=args.seq_out_len,
+                  in_dim=args.in_dim, out_dim=args.seq_out_len,
                   layers=args.layers, propalpha=args.propalpha, tanhalpha=args.tanhalpha, layer_norm_affline=True)
 
     print(args)

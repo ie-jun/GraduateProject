@@ -12,8 +12,20 @@ class nconv(nn.Module):
 
     def forward(self,x, A):
         x = torch.einsum('ncwl,vw->ncvl',(x,A))
+        # below version is possible too.
+        # x = torch.einsum('vw,ncwl->ncvl',(A,x))
         return x.contiguous()
 
+class nconv2(nn.Module):
+    # It is used to compute the dynamic graph's GC layer
+    def __init__(self):
+        super(nconv2,self).__init__()
+
+    def forward(self,x, A):
+        x = torch.einsum('ncwl,nvw->ncvl',(x,A))
+        # below version is possible too.
+        # x = torch.einsum('nvw,ncwl->ncvl',(A,x))
+        return x.contiguous()
 class dy_nconv(nn.Module):
     def __init__(self):
         super(dy_nconv,self).__init__()
@@ -56,6 +68,7 @@ class mixprop(nn.Module):
     def __init__(self,c_in,c_out,gdep,dropout,alpha):
         super(mixprop, self).__init__()
         self.nconv = nconv()
+        self.nconv2 = nconv2()
         self.mlp = linear((gdep+1)*c_in,c_out)
         self.gdep = gdep
         self.dropout = dropout
@@ -63,17 +76,37 @@ class mixprop(nn.Module):
 
 
     def forward(self,x,adj):
-        adj = adj + torch.eye(adj.size(0)).to(x.device)
-        d = adj.sum(1)
-        h = x
-        out = [h]
-        a = adj / d.view(-1, 1)
-        for i in range(self.gdep):
-            h = self.alpha*x + (1-self.alpha)*self.nconv(h,a)
-            out.append(h)
-        ho = torch.cat(out,dim=1)
-        ho = self.mlp(ho)
-        return ho
+        if len(adj.shape) == 3: # for dynamic graph
+            adj = adj + torch.eye(adj.size(1)).to(x.device)  # (bs , n , n ) shape
+            d = adj.sum(2)
+            h = x
+            out = [h]
+
+            a = []
+            for i in range(d.shape[0]):
+                a_i = adj[i] / d[i].view(-1, 1)
+                a.append(a_i)
+            a = torch.stack(a, dim=0) # (bs , n , n ) shape
+
+            for i in range(self.gdep):
+                h = self.alpha * x + (1 - self.alpha) * self.nconv2(h, a)
+                out.append(h)
+            ho = torch.cat(out, dim=1)
+            ho = self.mlp(ho)
+            return ho
+
+        else:
+            adj = adj + torch.eye(adj.size(0)).to(x.device) # (n , n ) shape
+            d = adj.sum(1)
+            h = x
+            out = [h]
+            a = adj / d.view(-1, 1)
+            for i in range(self.gdep):
+                h = self.alpha*x + (1-self.alpha)*self.nconv(h,a)
+                out.append(h)
+            ho = torch.cat(out,dim=1)
+            ho = self.mlp(ho)
+            return ho
 
 class dy_mixprop(nn.Module):
     def __init__(self,c_in,c_out,gdep,dropout,alpha):
@@ -203,6 +236,126 @@ class graph_constructor(nn.Module):
         a = torch.mm(nodevec1, nodevec2.transpose(1,0))-torch.mm(nodevec2, nodevec1.transpose(1,0))
         adj = F.relu(torch.tanh(self.alpha*a))
         return adj
+
+class new_graph_constructor(nn.Module):
+    def __init__(self, nnodes, predefined_A, in_dim,hidden_channels, seq_length, layer_depth, gcn_depth, dropout,propalpha,
+                                                                            dilation_exponential=1,layer_norm_affline=True):
+        super(new_graph_constructor, self).__init__()
+        self.nnodes = nnodes
+        self.predefined_A = predefined_A
+        self.in_dim = in_dim
+        self.hidden_channels = hidden_channels
+        self.seq_length = seq_length
+        self.layer_depth = layer_depth
+        self.gcn_depth = gcn_depth
+        self.dropout = dropout
+        self.propalpha = propalpha
+        self.dilation_exponential = dilation_exponential
+        self.layer_norm_affline = layer_norm_affline
+
+        # About Layers
+        self.start_conv = nn.Conv2d(in_channels=in_dim,
+                                    out_channels=hidden_channels,
+                                    kernel_size=(1, 1))
+
+        self.filter_convs = nn.ModuleList()
+        self.gate_convs = nn.ModuleList()
+
+        self.gconv1 = nn.ModuleList()
+        self.gconv2 = nn.ModuleList()
+
+        self.norm = nn.ModuleList()
+
+        self.seq_length = seq_length
+        kernel_size = 7
+        if dilation_exponential>1:
+            self.receptive_field = int(1+(kernel_size-1)*(dilation_exponential**layer_depth-1)/(dilation_exponential-1))
+        else:
+            self.receptive_field = layer_depth*(kernel_size-1) + 1
+
+        rf_size_0 = 1
+        new_dilation = 1
+        for j in range(1, layer_depth + 1):
+            if dilation_exponential > 1:
+                rf_size_j = int(
+                    rf_size_0 + (kernel_size - 1) * (dilation_exponential ** j - 1) / (dilation_exponential - 1))
+            else:
+                rf_size_j = rf_size_0 + j * (kernel_size - 1)
+
+            self.filter_convs.append(dilated_inception(hidden_channels, hidden_channels, dilation_factor=new_dilation))
+            self.gate_convs.append(dilated_inception(hidden_channels, hidden_channels, dilation_factor=new_dilation))
+
+            ''' self.residual_convs.append(nn.Conv2d(in_channels=conv_channels,
+                                                 out_channels=residual_channels,
+                                                 kernel_size=(1, 1)))
+            
+            if self.seq_length > self.receptive_field:
+                self.skip_convs.append(nn.Conv2d(in_channels=conv_channels,
+                                                 out_channels=skip_channels,
+                                                 kernel_size=(1, self.seq_length - rf_size_j + 1)))
+            else:
+                self.skip_convs.append(nn.Conv2d(in_channels=conv_channels,
+                                                 out_channels=skip_channels,
+                                                 kernel_size=(1, self.receptive_field - rf_size_j + 1)))
+
+            '''
+            self.gconv1.append(mixprop(hidden_channels, hidden_channels, gcn_depth, dropout, propalpha))
+            self.gconv2.append(mixprop(hidden_channels, hidden_channels, gcn_depth, dropout, propalpha))
+
+            # This module is used if residual is used.
+            if self.seq_length > self.receptive_field:
+                self.norm.append(LayerNorm((hidden_channels, nnodes, self.seq_length - rf_size_j + 1),
+                                           elementwise_affine=layer_norm_affline))
+            else:
+                self.norm.append(LayerNorm((hidden_channels, nnodes, self.receptive_field - rf_size_j + 1),
+                                           elementwise_affine=layer_norm_affline))
+
+            new_dilation *= dilation_exponential
+
+        if self.seq_length>self.receptive_field:
+            self.TC_summarize_conv = nn.Conv2d(hidden_channels, hidden_channels,(1,self.seq_length-self.receptive_field+1))
+            self.GC_summarize_conv = nn.Conv2d(hidden_channels, hidden_channels, (1, self.seq_length))
+        else:
+            self.TC_summarize_conv = nn.Conv2d(hidden_channels, hidden_channels,(1,1))
+            self.GC_summarize_conv = nn.Conv2d(hidden_channels, hidden_channels, (1, self.receptive_field))
+
+        self.out_conv = nn.Conv2d(hidden_channels,self.nnodes,(1,2))
+
+
+
+    def forward(self, x_batch , predefined_A):
+        seq_len = x_batch.size(3)
+        assert seq_len==self.seq_length, 'input sequence length not equal to preset sequence length'
+
+        if self.seq_length<self.receptive_field:
+            x_batch = nn.functional.pad(x_batch,(self.receptive_field-self.seq_length,0,0,0))
+
+        x = self.start_conv(x_batch)
+
+        tc_input = x
+        gc_input = x
+
+        # Getting Temporal features
+        for i in range(self.layer_depth):
+            filter = torch.tanh(self.filter_convs[i](tc_input))
+            gate = torch.sigmoid(self.gate_convs[i](tc_input))
+
+            tc_input = filter * gate
+            tc_input = F.dropout(tc_input, self.dropout, training=self.training)
+        tc_output = self.TC_summarize_conv(tc_input)
+
+        # Getting Spatial features
+        for i in range(self.layer_depth):
+            gc_input = self.gconv1[i](gc_input, predefined_A)+self.gconv2[i](gc_input, predefined_A.transpose(1,0))
+        gc_output = self.GC_summarize_conv(gc_input)
+
+        concated_data = torch.cat((tc_output,gc_output),dim=-1)
+        concated_data = self.out_conv(concated_data)
+
+        adj = torch.sigmoid(concated_data)
+
+        return adj.squeeze()
+
 
 class graph_global(nn.Module):
     def __init__(self, nnodes, k, dim, device, alpha=3, static_feat=None):
