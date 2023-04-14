@@ -319,7 +319,9 @@ class new_graph_constructor(nn.Module):
             self.TC_summarize_conv = nn.Conv2d(hidden_channels, hidden_channels,(1,1))
             self.GC_summarize_conv = nn.Conv2d(hidden_channels, hidden_channels, (1, self.receptive_field))
 
-        self.out_conv = nn.Conv2d(hidden_channels,self.nnodes,(1,2))
+        # TC만 사용하는 version
+        # self.out_conv = nn.Conv2d(hidden_channels,self.nnodes,(1,2))
+        self.out_conv = nn.Conv2d(hidden_channels, self.nnodes, (1, 1))
 
 
 
@@ -344,15 +346,18 @@ class new_graph_constructor(nn.Module):
             tc_input = F.dropout(tc_input, self.dropout, training=self.training)
         tc_output = self.TC_summarize_conv(tc_input)
 
-        # Getting Spatial features
-        for i in range(self.layer_depth):
-            gc_input = self.gconv1[i](gc_input, predefined_A)+self.gconv2[i](gc_input, predefined_A.transpose(1,0))
-        gc_output = self.GC_summarize_conv(gc_input)
+        # # Getting Spatial features
+        # for i in range(self.layer_depth):
+        #     gc_input = self.gconv1[i](gc_input, predefined_A)+self.gconv2[i](gc_input, predefined_A.transpose(1,0))
+        # gc_output = self.GC_summarize_conv(gc_input)
+        #
+        # concated_data = torch.cat((tc_output,gc_output),dim=-1)
+        # concated_data = self.out_conv(concated_data)
+        #
+        # adj = torch.sigmoid(concated_data)
 
-        concated_data = torch.cat((tc_output,gc_output),dim=-1)
-        concated_data = self.out_conv(concated_data)
-
-        adj = torch.sigmoid(concated_data)
+        output_data = self.out_conv(tc_output)
+        adj = torch.sigmoid(output_data)
 
         return adj.squeeze()
 
