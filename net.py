@@ -1,5 +1,5 @@
 from layer import *
-
+import numpy as np
 
 class gtnet(nn.Module):
     def __init__(self, gcn_true, buildA_true, hidden_channels, seq_length, gcn_depth,layer_depth,num_nodes, device, new_graph_learning , predefined_A=None, static_feat=None, dropout=0.3, subgraph_size=20, node_dim=40, dilation_exponential=1, conv_channels=32, residual_channels=32, skip_channels=64, end_channels=128, in_dim=2, out_dim=12, layers=3, propalpha=0.05, tanhalpha=3, layer_norm_affline=True):
@@ -20,10 +20,12 @@ class gtnet(nn.Module):
                                     out_channels=residual_channels,
                                     kernel_size=(1, 1))
         self.new_graph_learning = new_graph_learning
-        if self.new_graph_learning :
-            self.gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,dilation_exponential,layer_norm_affline)
-        else:
-            self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=propalpha, static_feat=static_feat)
+
+        self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=propalpha,
+                                    static_feat=static_feat)
+
+        self.new_gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,dilation_exponential,layer_norm_affline)
+
 
         self.seq_length = seq_length
         kernel_size = 7
@@ -59,6 +61,7 @@ class gtnet(nn.Module):
                                                     kernel_size=(1, self.receptive_field-rf_size_j+1)))
 
                 if self.gcn_true:
+                    # mixprop module is changed if graph is dynamic.
                     self.gconv1.append(mixprop(conv_channels, residual_channels, gcn_depth, dropout, propalpha))
                     self.gconv2.append(mixprop(conv_channels, residual_channels, gcn_depth, dropout, propalpha))
 
@@ -94,14 +97,15 @@ class gtnet(nn.Module):
 
         if self.gcn_true:
             if self.buildA_true:
-
-                if self.new_graph_learning:
-                    adp = self.gc(input, self.predefined_A)
+                if idx is None:
+                    adp = self.gc(self.idx)
                 else:
-                    if idx is None:
-                        adp = self.gc(self.idx)
-                    else:
-                        adp = self.gc(idx)
+                    adp = self.gc(idx)
+
+                # new graph learning uses exsiting graph to learn new graph ( or pre_defined graph)
+                if self.new_graph_learning:
+                    adp = self.new_gc(input, adp)
+
             else:
                 adp = self.predefined_A
 
@@ -129,7 +133,11 @@ class gtnet(nn.Module):
             s = self.skip_convs[i](s)
             skip = s + skip
             if self.gcn_true:
-                x = self.gconv1[i](x, adp)+self.gconv2[i](x, adp.transpose(1,0))
+                # It is changed if graph is dynamic.
+                if len(adp.shape) == 3: # for dynamic graph
+                    x = self.gconv1[i](x, adp) + self.gconv2[i](x, adp.permute(0,2,1))
+                else: # for static graph
+                    x = self.gconv1[i](x, adp)+self.gconv2[i](x, adp.transpose(1,0))
             else:
                 x = self.residual_convs[i](x)
 

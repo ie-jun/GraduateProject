@@ -19,7 +19,7 @@ my_new_graph_method = True
 my_layer_depth = 3
 my_hidden_dim = 32
 
-my_epochs = 30
+my_epochs = 100
 my_runs = 1
 my_topk = 20
 my_seq_in_len = 12
