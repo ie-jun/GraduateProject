@@ -2,7 +2,7 @@ from layer import *
 import numpy as np
 
 class gtnet(nn.Module):
-    def __init__(self, gcn_true, buildA_true, hidden_channels, seq_length, gcn_depth,layer_depth,num_nodes, device, new_graph_learning , predefined_A=None, static_feat=None, dropout=0.3, subgraph_size=20, node_dim=40, dilation_exponential=1, conv_channels=32, residual_channels=32, skip_channels=64, end_channels=128, in_dim=2, out_dim=12, layers=3, propalpha=0.05, tanhalpha=3, layer_norm_affline=True):
+    def __init__(self, gcn_true, buildA_true, hidden_channels, seq_length, gcn_depth,layer_depth,num_nodes, device, new_graph_learning , new_graph_only_TC,predefined_A=None, static_feat=None, dropout=0.3, subgraph_size=20, node_dim=40, dilation_exponential=1, conv_channels=32, residual_channels=32, skip_channels=64, end_channels=128, in_dim=2, out_dim=12, layers=3, propalpha=0.05, tanhalpha=3, layer_norm_affline=True,):
         super(gtnet, self).__init__()
         self.gcn_true = gcn_true
         self.buildA_true = buildA_true
@@ -24,7 +24,7 @@ class gtnet(nn.Module):
         self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=propalpha,
                                     static_feat=static_feat)
 
-        self.new_gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,dilation_exponential,layer_norm_affline)
+        self.new_gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,new_graph_only_TC,dilation_exponential,layer_norm_affline)
 
 
         self.seq_length = seq_length

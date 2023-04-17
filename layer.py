@@ -238,7 +238,7 @@ class graph_constructor(nn.Module):
         return adj
 
 class new_graph_constructor(nn.Module):
-    def __init__(self, nnodes, predefined_A, in_dim,hidden_channels, seq_length, layer_depth, gcn_depth, dropout,propalpha,
+    def __init__(self, nnodes, predefined_A, in_dim,hidden_channels, seq_length, layer_depth, gcn_depth, dropout,propalpha,new_graph_only_TC,
                                                                             dilation_exponential=1,layer_norm_affline=True):
         super(new_graph_constructor, self).__init__()
         self.nnodes = nnodes
@@ -252,6 +252,7 @@ class new_graph_constructor(nn.Module):
         self.propalpha = propalpha
         self.dilation_exponential = dilation_exponential
         self.layer_norm_affline = layer_norm_affline
+        self.new_graph_only_TC = new_graph_only_TC
 
         # About Layers
         self.start_conv = nn.Conv2d(in_channels=in_dim,
@@ -320,8 +321,11 @@ class new_graph_constructor(nn.Module):
             self.GC_summarize_conv = nn.Conv2d(hidden_channels, hidden_channels, (1, self.receptive_field))
 
         # TC만 사용하는 version
-        # self.out_conv = nn.Conv2d(hidden_channels,self.nnodes,(1,2))
-        self.out_conv = nn.Conv2d(hidden_channels, self.nnodes, (1, 1))
+        if self.new_graph_only_TC:
+            self.out_conv = nn.Conv2d(hidden_channels, self.nnodes, (1, 1))
+        else:
+            self.out_conv = nn.Conv2d(hidden_channels, self.nnodes, (1, 2))
+
 
 
 
@@ -346,20 +350,24 @@ class new_graph_constructor(nn.Module):
             tc_input = F.dropout(tc_input, self.dropout, training=self.training)
         tc_output = self.TC_summarize_conv(tc_input)
 
-        # # Getting Spatial features
-        # for i in range(self.layer_depth):
-        #     gc_input = self.gconv1[i](gc_input, predefined_A)+self.gconv2[i](gc_input, predefined_A.transpose(1,0))
-        # gc_output = self.GC_summarize_conv(gc_input)
-        #
-        # concated_data = torch.cat((tc_output,gc_output),dim=-1)
-        # concated_data = self.out_conv(concated_data)
-        #
-        # adj = torch.sigmoid(concated_data)
+        if self.new_graph_only_TC:
+            output_data = self.out_conv(tc_output)
+            adj = torch.sigmoid(output_data)
 
-        output_data = self.out_conv(tc_output)
-        adj = torch.sigmoid(output_data)
+            return adj.squeeze()
 
-        return adj.squeeze()
+        else:
+            # Getting Spatial features
+            for i in range(self.layer_depth):
+                gc_input = self.gconv1[i](gc_input, predefined_A)+self.gconv2[i](gc_input, predefined_A.transpose(1,0))
+            gc_output = self.GC_summarize_conv(gc_input)
+
+            concated_data = torch.cat((tc_output,gc_output),dim=-1)
+            concated_data = self.out_conv(concated_data)
+
+            adj = torch.sigmoid(concated_data)
+
+            return adj.squeeze()
 
 
 class graph_global(nn.Module):

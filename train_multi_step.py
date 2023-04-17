@@ -7,24 +7,27 @@ from trainer import Trainer
 from net import gtnet
 
 # Change below when you change your dataset.
-my_num_node = 207 # METR-LA is 207, PEMS-BAY is 325.
-my_save_path = './save/METR-LA_new' # save path of model's parameters
-my_result_path = './save/result/METR-LA_new' # save path of results
-my_data = 'data/METR-LA'
-my_adj_data = 'data/sensor_graph/adj_mx.pkl' # adj_mx.pkl or adj_mx_bay.pkl
+my_num_node = 325 # METR-LA is 207, PEMS-BAY is 325.
+my_save_path = './save/PEMS-BAY_new' # save path of model's parameters
+my_result_path = './save/result/PEMS-BAY_new' # save path of results
+my_data = 'data/PEMS-BAY'
+my_adj_data = 'data/sensor_graph/adj_mx_bay.pkl' # adj_mx.pkl or adj_mx_bay.pkl
 my_print_every = 50
 my_train = True
-my_data_name = 'METR-LA_new'
+my_data_name = 'PEMS-BAY'
 my_new_graph_method = True
 my_layer_depth = 3
 my_hidden_dim = 32
+my_using_only_TC = False # True: only use TC, False: use TC + GCN when making new graph learning method.
 
 my_epochs = 100
-my_runs = 1
+my_runs = 6
 my_topk = 20
+my_dilation_exponential = 1
 my_seq_in_len = 12
 my_seq_out_len = 12
 my_batch_size =64
+
 
 def str_to_bool(value):
     if isinstance(value, bool):
@@ -41,6 +44,7 @@ parser.add_argument('--train', type=str_to_bool, default=my_train ,help='whether
 parser.add_argument('--new_graph_learning', type=str_to_bool, default=my_new_graph_method ,help='whether to do new graph learning method or not')
 parser.add_argument('--layer_depth',type=int,default=my_layer_depth,help='depth of new graph learning layer')
 parser.add_argument('--hidden_dim',type=int,default=my_hidden_dim,help='hidden state dimension of new graph learning layer')
+parser.add_argument('--new_graph_only_TC', type=str_to_bool, default=my_using_only_TC ,help='True: only use TC, False: use TC + GCN when making new graph learning method.')
 
 
 parser.add_argument('--device',type=str,default='cuda',help='')
@@ -57,7 +61,7 @@ parser.add_argument('--num_nodes',type=int,default= my_num_node ,help='number of
 parser.add_argument('--dropout',type=float,default=0.3,help='dropout rate')
 parser.add_argument('--subgraph_size',type=int,default= my_topk,help='k')
 parser.add_argument('--node_dim',type=int,default=40,help='dim of nodes')
-parser.add_argument('--dilation_exponential',type=int,default=1,help='dilation exponential')
+parser.add_argument('--dilation_exponential',type=int,default=my_dilation_exponential,help='dilation exponential')
 
 parser.add_argument('--conv_channels',type=int,default=32,help='convolution channels')
 parser.add_argument('--residual_channels',type=int,default=32,help='residual channels')
@@ -128,6 +132,7 @@ def main(runid):
                   dropout=args.dropout, subgraph_size=args.subgraph_size,
                   node_dim=args.node_dim,
                   new_graph_learning=args.new_graph_learning,
+                  new_graph_only_TC=args.new_graph_only_TC,
                   dilation_exponential=args.dilation_exponential,
                   conv_channels=args.conv_channels, residual_channels=args.residual_channels,
                   skip_channels=args.skip_channels, end_channels= args.end_channels,
@@ -231,6 +236,7 @@ def main(runid):
 
             if mvalid_loss<minl:
                 os.makedirs(args.save, exist_ok=True)
+                # when previous version is already existed, we will save the new version as "expid-runid-2.pth"
                 torch.save(engine.model.state_dict(), args.save + f"/{my_data_name}_exp" + str(args.expid) + "_" + str(runid) +".pth")
                 minl = mvalid_loss
 
@@ -242,7 +248,7 @@ def main(runid):
         loss_data = np.concatenate(([his_train_loss],[his_train_mape],[his_train_rmse],[his_valid_loss],[his_valid_mape],[his_valid_rmse]),axis=0).T
         # store every epoch loss
         datetime = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
-        write_csv(my_result_path,f'best_loss_run{runid}_{datetime}.csv',loss_data,col_name)
+        write_csv(my_result_path,f'every_epoch_train_valid_loss_run{runid+1}_{datetime}.csv',loss_data,col_name)
 
         print("Training finished")
         print("The valid loss on best model is", str(round(his_valid_loss[bestid],4)))
@@ -322,9 +328,17 @@ if __name__ == "__main__":
         mape.append(m2)
         rmse.append(m3)
 
+        # save every run's test result
+        datetime = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
+        col_name = ['horizon', 'test_mae', 'test_mape', 'test_rmse']
+        test_data = np.concatenate(([np.arange(1, args.seq_out_len + 1)], [m1], [m2], [m3]), axis=0).T
+        write_csv(my_result_path, f'test_result_run{i + 1}_{datetime}.csv', test_data, col_name)
+
     mae = np.array(mae)
     mape = np.array(mape)
     rmse = np.array(rmse)
+
+    # save every run's test result
 
     amae = np.mean(mae, axis=0)
     amape = np.mean(mape,axis=0)
@@ -353,7 +367,7 @@ if __name__ == "__main__":
     result_data = np.concatenate(([[i for i in range(1,args.seq_out_len+1) ]],[amae],[armse],[amape],[smae],[srmse],[smape]),axis=0).T
 
     datetime = time.strftime("%Y-%m-%d-%H-%M-%S", time.localtime())
-    write_csv(my_result_path, f'Results_for_{args.runs}runs_test_{datetime}.csv', result_data, result_col_name)
+    write_csv(my_result_path, f'Mean_Results_for_{args.runs}runs_test_{datetime}.csv', result_data, result_col_name)
 
 
 
