@@ -8,14 +8,14 @@ from net import gtnet
 
 # Change below when you change your dataset.
 my_num_node = 325 # METR-LA is 207, PEMS-BAY is 325.
-my_save_path = './save/PEMS-BAY_new' # save path of model's parameters
-my_result_path = './save/result/PEMS-BAY_new' # save path of results
+my_save_path = './save/PEMS-BAY' # save path of model's parameters
+my_result_path = './save/result/PEMS-BAY' # save path of results
 my_data = 'data/PEMS-BAY'
 my_adj_data = 'data/sensor_graph/adj_mx_bay.pkl' # adj_mx.pkl or adj_mx_bay.pkl
 my_print_every = 50
 my_train = True
 my_data_name = 'PEMS-BAY'
-my_new_graph_method = True
+my_new_graph_method = False
 my_layer_depth = 3
 my_hidden_dim = 32
 my_using_only_TC = False # True: only use TC, False: use TC + GCN when making new graph learning method.
@@ -37,6 +37,19 @@ def str_to_bool(value):
     elif value.lower() in {'true', 't', '1', 'yes', 'y'}:
         return True
     raise ValueError(f'{value} is not a valid boolean value')
+
+def seed_everything(seed: int):
+    import random, os
+    import numpy as np
+    import torch
+
+    random.seed(seed)
+    os.environ['PYTHONHASHSEED'] = str(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = True
 
 
 parser = argparse.ArgumentParser()
@@ -319,6 +332,8 @@ if __name__ == "__main__":
 
     for i in range(args.runs):
         print("%d run" % (i + 1))
+        seed_everything(i)
+
         vm1, vm2, vm3, m1, m2, m3 = main(i)
         vmae.append(vm1)
         vmape.append(vm2)
