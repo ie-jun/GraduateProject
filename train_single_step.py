@@ -11,16 +11,18 @@ import importlib
 from util import *
 from trainer import Optim
 
-my_data ='./data/exchange_rate.txt'
-my_data_name = 'exchange_rate'
-my_save_path = './save/exchange_rate' # save path of model's parameters
-my_result_path = './save/result/exchange_rate' # save path of results
+my_data ='./data/electricity.txt'
+my_data_name = 'electricity'
+my_save_path = './save/electricity' # save path of model's parameters
+my_result_path = './save/result/electricity' # save path of results
+my_num_node = 321 # have to be changed according to dataset  exchange_rate:8, solar:137, traffic:862, electricity:321
+my_topk = 20 # have to be changed according to dataset  exchange_rate:4, solar:20, traffic:20, electricity:20
 my_train = True
 my_new_graph_method = False
 my_runs = 10
 my_epochs = 30
 
-my_num_node = 137
+
 my_device = 'cuda'
 
 my_seq_in_len = 24*7
@@ -29,7 +31,7 @@ my_seq_out_len = 1 # single step prediction에서는 1로 고정?
 my_batch_size = 32
 
 use_l1loss = True
-my_topk = 20
+
 my_dilation_exponential = 2
 my_in_dim = 1 # use only velocity
 my_hidden_dim = 32
@@ -279,7 +281,7 @@ def main(runid):
 
 if __name__ == "__main__":
 
-    for horizon in [3,6,12,24]:
+    for horizon in [3]: # [3,6,12,24]:
         args.horizon = horizon
 
         vacc = []

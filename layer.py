@@ -57,7 +57,7 @@ class prop(nn.Module):
         d = adj.sum(1)
         h = x
         dv = d
-        a = adj / dv.view(-1, 1)
+        a = adj / dv.reshape(-1, 1)
         for i in range(self.gdep):
             h = self.alpha*x + (1-self.alpha)*self.nconv(h,a)
         ho = self.mlp(h)
@@ -84,7 +84,7 @@ class mixprop(nn.Module):
 
             a = []
             for i in range(d.shape[0]):
-                a_i = adj[i] / d[i].view(-1, 1)
+                a_i = adj[i] / d[i].reshape(-1, 1)
                 a.append(a_i)
             a = torch.stack(a, dim=0) # (bs , n , n ) shape
 
@@ -100,7 +100,7 @@ class mixprop(nn.Module):
             d = adj.sum(1)
             h = x
             out = [h]
-            a = adj / d.view(-1, 1)
+            a = adj / d.reshape(-1, 1)
             for i in range(self.gdep):
                 h = self.alpha*x + (1-self.alpha)*self.nconv(h,a)
                 out.append(h)
