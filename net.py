@@ -2,7 +2,7 @@ from layer import *
 import numpy as np
 
 class gtnet(nn.Module):
-    def __init__(self, gcn_true, buildA_true, hidden_channels, seq_length, gcn_depth,layer_depth,num_nodes, device, new_graph_learning , new_graph_only_TC,predefined_A=None, static_feat=None, dropout=0.3, subgraph_size=20, node_dim=40, dilation_exponential=1, conv_channels=32, residual_channels=32, skip_channels=64, end_channels=128, in_dim=2, out_dim=12, layers=3, propalpha=0.05, tanhalpha=3, layer_norm_affline=True,):
+    def __init__(self, gcn_true, buildA_true, hidden_channels, seq_length, gcn_depth,layer_depth,num_nodes, device, new_graph_learning , new_graph_only_TC,predefined_A=None, static_feat=None, dropout=0.3, subgraph_size=20, node_dim=40, dilation_exponential=1, conv_channels=32, residual_channels=32, skip_channels=64, end_channels=128, in_dim=2, out_dim=12, layers=3, propalpha=0.05, tanhalpha=3, layer_norm_affline=True, dyn_residual=False,):
         super(gtnet, self).__init__()
         self.gcn_true = gcn_true
         self.buildA_true = buildA_true
@@ -24,7 +24,13 @@ class gtnet(nn.Module):
         self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=tanhalpha,
                                     static_feat=static_feat)
 
-        self.new_gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,new_graph_only_TC,dilation_exponential,layer_norm_affline)
+        self.new_gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,new_graph_only_TC,dilation_exponential,layer_norm_affline, residual_mode=dyn_residual)
+
+        self.dyn_residual = dyn_residual
+        if new_graph_learning and dyn_residual:
+            # ponytail: 스칼라 게이트 하나, 0 초기화(ReZero 방식) — 학습 시작점이 정확히 정적 MTGNN.
+            # 동적 성분이 유용할 때만 g 가 열린다. trainer 에서 weight decay 제외 대상.
+            self.dyn_gate = nn.Parameter(torch.zeros(1))
 
 
         self.seq_length = seq_length
@@ -104,7 +110,13 @@ class gtnet(nn.Module):
 
                 # new graph learning uses exsiting graph to learn new graph ( or pre_defined graph)
                 if self.new_graph_learning:
-                    adp = self.new_gc(input, adp)
+                    if self.dyn_residual:
+                        # A = relu(A_static + g·ΔA) : g=0 이면 정확히 정적 그래프(baseline)와 동일.
+                        # (N,N) + (bs,N,N) 브로드캐스트 → (bs,N,N), 이후 동적(mixprop 3D) 경로.
+                        delta = self.new_gc(input, adp)
+                        adp = torch.relu(adp + self.dyn_gate * delta)
+                    else:
+                        adp = self.new_gc(input, adp)
 
             else:
                 adp = self.predefined_A

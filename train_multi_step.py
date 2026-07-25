@@ -55,6 +55,7 @@ def seed_everything(seed: int):
 parser = argparse.ArgumentParser()
 parser.add_argument('--train', type=str_to_bool, default=my_train ,help='whether to do training or testing')
 parser.add_argument('--new_graph_learning', type=str_to_bool, default=my_new_graph_method ,help='whether to do new graph learning method or not')
+parser.add_argument('--dyn_residual', type=str_to_bool, default=False, help='dynamic graph as gated residual on static graph: A = relu(A_static + g*dA), g zero-init')
 parser.add_argument('--layer_depth',type=int,default=my_layer_depth,help='depth of new graph learning layer')
 parser.add_argument('--hidden_dim',type=int,default=my_hidden_dim,help='hidden state dimension of new graph learning layer')
 parser.add_argument('--new_graph_only_TC', type=str_to_bool, default=my_using_only_TC ,help='True: only use TC, False: use TC + GCN when making new graph learning method.')
@@ -146,6 +147,7 @@ def main(runid):
                   node_dim=args.node_dim,
                   new_graph_learning=args.new_graph_learning,
                   new_graph_only_TC=args.new_graph_only_TC,
+                  dyn_residual=args.dyn_residual,
                   dilation_exponential=args.dilation_exponential,
                   conv_channels=args.conv_channels, residual_channels=args.residual_channels,
                   skip_channels=args.skip_channels, end_channels= args.end_channels,
@@ -246,6 +248,20 @@ def main(runid):
 
             log = 'Epoch: {:03d}, Train Loss: {:.4f}, Train MAPE: {:.4f}, Train RMSE: {:.4f}, Valid Loss: {:.4f}, Valid MAPE: {:.4f}, Valid RMSE: {:.4f}, Training Time: {:.4f}/epoch'
             print(log.format(i, mtrain_loss, mtrain_mape, mtrain_rmse, mvalid_loss, mvalid_mape, mvalid_rmse, (t2 - t1)),flush=True)
+
+            # 게이트 잔차 모드 진단: 게이트가 열리는지(g), 섭동 크기(|g·dA|), 최종 A 의 입력 민감도.
+            # 붕괴/불사용을 학습 중에 바로 볼 수 있게 매 에폭 val 첫 배치로 측정한다.
+            if args.new_graph_learning and args.dyn_residual:
+                with torch.no_grad():
+                    xd, _ = next(dataloader['val_loader'].get_iterator())
+                    xd = torch.Tensor(xd).to(device).transpose(1, 3)
+                    A_s = engine.model.gc(engine.model.idx)
+                    d_A = engine.model.new_gc(xd, A_s)
+                    A_d = torch.relu(A_s + engine.model.dyn_gate * d_A)
+                    print('DynDiag: gate={:.6f}, |g*dA|mean={:.6f}, A-input-std={:.6f}'.format(
+                        engine.model.dyn_gate.item(),
+                        (engine.model.dyn_gate * d_A).abs().mean().item(),
+                        A_d.std(0).mean().item()), flush=True)
 
             if mvalid_loss<minl:
                 os.makedirs(args.save, exist_ok=True)

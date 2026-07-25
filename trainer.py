@@ -7,7 +7,16 @@ class Trainer():
         self.scaler = scaler
         self.model = model
         self.model.to(device)
-        self.optimizer = optim.Adam(self.model.parameters(), lr=lrate, weight_decay=wdecay)
+        # dyn_gate(0 초기화 게이트)는 weight decay 대상에서 제외한다 — decay 가 게이트를
+        # 0 으로 끌어당기면 "동적 성분이 필요 없다"와 "decay 때문에 못 열렸다"를 구분할 수 없다.
+        # dyn_gate 가 없는 모델(baseline)에서는 기존과 완전히 동일하게 동작한다.
+        no_decay = [p for n, p in self.model.named_parameters() if 'dyn_gate' in n]
+        if no_decay:
+            decay = [p for n, p in self.model.named_parameters() if 'dyn_gate' not in n]
+            self.optimizer = optim.Adam([{'params': decay, 'weight_decay': wdecay},
+                                         {'params': no_decay, 'weight_decay': 0.0}], lr=lrate)
+        else:
+            self.optimizer = optim.Adam(self.model.parameters(), lr=lrate, weight_decay=wdecay)
         self.loss = util.masked_mae
         self.clip = clip
         self.step = step_size

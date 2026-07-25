@@ -235,10 +235,14 @@ class graph_constructor(nn.Module):
 
 class new_graph_constructor(nn.Module):
     def __init__(self, nnodes, predefined_A, in_dim,hidden_channels, seq_length, layer_depth, gcn_depth, dropout,propalpha,new_graph_only_TC,
-                                                                            dilation_exponential=1,layer_norm_affline=True):
+                                                                            dilation_exponential=1,layer_norm_affline=True, residual_mode=False):
         super(new_graph_constructor, self).__init__()
         self.nnodes = nnodes
         self.predefined_A = predefined_A
+        # residual_mode: A 자체가 아니라 부호 있는 섭동 ΔA∈[-1,1] 를 내보낸다 (tanh).
+        # sigmoid 는 pre-activation 이 죽으면 0.5 밀집 행렬(균일 혼합 = 유해)로 붕괴하지만,
+        # tanh 는 죽어도 0(= 정적 그래프 그대로, 무해)으로 죽는다.
+        self.residual_mode = residual_mode
         self.in_dim = in_dim
         self.hidden_channels = hidden_channels
         self.seq_length = seq_length
@@ -348,7 +352,7 @@ class new_graph_constructor(nn.Module):
 
         if self.new_graph_only_TC:
             output_data = self.out_conv(tc_output)
-            adj = torch.sigmoid(output_data)
+            adj = torch.tanh(output_data) if self.residual_mode else torch.sigmoid(output_data)
 
             return adj.squeeze(-1)
 
@@ -361,7 +365,7 @@ class new_graph_constructor(nn.Module):
             concated_data = torch.cat((tc_output,gc_output),dim=-1)
             concated_data = self.out_conv(concated_data)
 
-            adj = torch.sigmoid(concated_data)
+            adj = torch.tanh(concated_data) if self.residual_mode else torch.sigmoid(concated_data)
 
             return adj.squeeze(-1)
 
