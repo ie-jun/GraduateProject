@@ -50,6 +50,12 @@ CONFIGS = {
     "fixed_dyn": dict(
         repo="thesis", ngl=True, tanhalpha=3.0,
         desc="기여 버전 Dynamic, alpha 수정 후 — 기여의 진짜 성능"),
+    "fixed_base_big": dict(
+        repo="thesis", ngl=False, tanhalpha=3.0,
+        extra={"conv_channels": 37, "residual_channels": 37,
+               "skip_channels": 74, "end_channels": 148},
+        desc="용량 맞춘 baseline — 사용 파라미터 483,197개로 fixed_dyn 실효치"
+             "(486,011)와 -0.6% 차이. fixed_dyn 이 이겨도 '용량 덕'인지 가려낸다"),
 }
 
 
@@ -76,11 +82,14 @@ def build_command(cfg_name, cfg, ds_name, ds, args, save_dir):
         # 디렉터리를 스스로 만들지 않으므로 미리 만들어 둔다.
         return common + ["--save", str(save_dir) + os.sep], ORIGINAL
 
-    return common + [
+    cmd = common + [
         "--train", "True",
         "--new_graph_learning", str(cfg["ngl"]),
         "--save", str(save_dir),
-    ], ROOT
+    ]
+    for k, v in cfg.get("extra", {}).items():
+        cmd += [f"--{k}", str(v)]
+    return cmd, ROOT
 
 
 def stream(cmd, cwd, log_path):
