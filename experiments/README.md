@@ -26,7 +26,7 @@ python3 experiments/setup.py
 ./venv/bin/python experiments/summarize.py --dataset METR-LA
 ```
 
-## 5가지 설정
+## 6가지 설정
 
 | 설정 | 코드 | `new_graph_learning` | `tanhalpha` | 의미 |
 |---|---|---|---|---|
@@ -35,6 +35,7 @@ python3 experiments/setup.py
 | `thesis_dyn` | 이 저장소 | True | 0.05 | 석사논문이 실제로 돌린 Dynamic |
 | `fixed_base` | 이 저장소 | False | 3 | alpha 수정 후 baseline |
 | `fixed_dyn` | 이 저장소 | True | 3 | alpha 수정 후 Dynamic (기여의 진짜 성능) |
+| `fixed_base_big` | 이 저장소 | False | 3 | **용량 맞춘 baseline** — 채널 37/74/148 로 키워 사용 파라미터 483,197개 (`fixed_dyn` 실효치 486,011 대비 -0.6%) |
 
 `original` 은 `../MTGNN_original` 체크아웃을 그대로 실행한다. 원본 소스는 전혀 건드리지
 않고, 데이터/저장 경로만 절대경로로 넘긴다. 없으면 이렇게 받는다:
@@ -59,6 +60,26 @@ git clone https://github.com/nnzhan/MTGNN.git ../MTGNN_original
    `thesis_base` 가 나쁘다면 논문의 Dynamic 우위가 과대평가된 것이다.
 4. **`fixed_dyn` vs `fixed_base`** — 양쪽 모두 올바른 alpha 를 쓴 상태에서의 순수 기여 효과.
    **논문의 주장이 살아남는지가 여기서 갈린다.**
+5. **`fixed_dyn` vs `fixed_base_big`** — `fixed_dyn` 이 4번에서 이겼을 때, 그 우위가
+   "동적 그래프 덕"인지 "파라미터가 많아서"인지 가려낸다. 사용 파라미터를 맞췄으므로
+   여기서도 이겨야 동적 그래프 자체의 효과라고 주장할 수 있다.
+
+   참고: `new_gc` 모듈은 `new_graph_learning=False` 여도 항상 생성되므로 **총** 파라미터는
+   모든 thesis 설정에서 764,219개로 같다. 위 표의 숫자는 forward 에서 실제로 쓰이는
+   파라미터 기준이다 (`fixed_dyn` 은 한 번도 호출되지 않는 `new_gc.norm` 278,208개를 제외한
+   실효치).
+
+추가로, `fixed_dyn` 의 학습이 끝나면 **동적 그래프가 정말 동적으로 동작하는지** 확인한다:
+
+```bash
+./venv/bin/python experiments/dynamics_check.py \
+    --checkpoint save/METR-LA/fixed_dyn/PEMS-BAY_exp1_0.pth
+```
+
+출근 시간대와 심야 입력에 대한 인접행렬 A 를 뽑아 시간대 간 차이를 측정한다.
+A 가 입력과 무관한 상수로 붕괴했다면(sigmoid 출력이라 흔한 붕괴 모드) "동적 그래프"
+주장 자체가 성립하지 않으므로, 성능 비교와 별개로 반드시 확인해야 한다.
+(체크포인트 파일명의 `PEMS-BAY` 는 `train_multi_step.py` 의 하드코딩이며 내용은 METR-LA 다.)
 
 참고로 석사논문 Table 3 의 MTGNN 행은 원본 논문 값과 다르다(직접 재실행한 값으로 보임):
 
