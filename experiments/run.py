@@ -31,6 +31,11 @@ THESIS_CSV_DIR = ROOT / "save" / "result" / "PEMS-BAY"
 DATASETS = {
     "METR-LA": dict(num_nodes=207, adj="adj_mx.pkl"),
     "PEMS-BAY": dict(num_nodes=325, adj="adj_mx_bay.pkl"),
+    # 참 그래프가 낮/밤에 전환되는 합성 데이터 (experiments/make_switching_data.py 로 생성).
+    # 동적 그래프가 실제로 필요한 무대 — 게이트 개방 여부와 그래프 복원을 참값 대조로 평가.
+    # subgraph_size=5: 노드 30개에 기본 k=20 이면 정적 그래프가 거의 밀집이 된다(참 그래프는 부모 3개).
+    "SYN-SWITCH": dict(num_nodes=30, adj="adj_syn_switch.pkl",
+                       extra={"subgraph_size": 5}),
 }
 
 # repo: "original" = 원본 MTGNN 저장소, "thesis" = 이 저장소(기여 버전)
@@ -50,6 +55,11 @@ CONFIGS = {
     "fixed_dyn": dict(
         repo="thesis", ngl=True, tanhalpha=3.0,
         desc="기여 버전 Dynamic, alpha 수정 후 — 기여의 진짜 성능"),
+    "resid_dyn": dict(
+        repo="thesis", ngl=True, tanhalpha=3.0,
+        extra={"dyn_residual": "True"},
+        desc="게이트 잔차 동적 그래프(v2) — A = relu(A_static + g·ΔA), g 는 0 에서 시작. "
+             "g 가 열리는지로 '동적 성분이 필요한가'를 판별한다 (DynDiag 로그 참조)"),
     "fixed_base_big": dict(
         repo="thesis", ngl=False, tanhalpha=3.0,
         extra={"conv_channels": 37, "residual_channels": 37,
@@ -76,6 +86,9 @@ def build_command(cfg_name, cfg, ds_name, ds, args, save_dir):
         "--runs", str(args.runs),
         "--tanhalpha", str(cfg["tanhalpha"]),
     ]
+    # 데이터셋별 추가 인자(예: SYN-SWITCH 의 subgraph_size) — 두 저장소 공통 인자만 넣을 것
+    for k, v in ds.get("extra", {}).items():
+        common += [f"--{k}", str(v)]
 
     if cfg["repo"] == "original":
         # 원본은 save 경로를 문자열로 이어붙이므로(args.save + "exp...") 끝에 구분자가 필요하고,
