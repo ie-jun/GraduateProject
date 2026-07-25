@@ -21,7 +21,7 @@ class gtnet(nn.Module):
                                     kernel_size=(1, 1))
         self.new_graph_learning = new_graph_learning
 
-        self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=propalpha,
+        self.gc = graph_constructor(num_nodes, subgraph_size, node_dim, device, alpha=tanhalpha,
                                     static_feat=static_feat)
 
         self.new_gc = new_graph_constructor(num_nodes, self.predefined_A, in_dim, hidden_channels, seq_length, layer_depth,gcn_depth,dropout,propalpha,new_graph_only_TC,dilation_exponential,layer_norm_affline)

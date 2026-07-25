@@ -1,3 +1,7 @@
 /.idea
 /venv
 /data
+/save
+__pycache__/
+/.omc
+experiments/results/

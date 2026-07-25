@@ -82,11 +82,7 @@ class mixprop(nn.Module):
             h = x
             out = [h]
 
-            a = []
-            for i in range(d.shape[0]):
-                a_i = adj[i] / d[i].reshape(-1, 1)
-                a.append(a_i)
-            a = torch.stack(a, dim=0) # (bs , n , n ) shape
+            a = adj / d.unsqueeze(-1) # (bs , n , n ) shape
 
             for i in range(self.gdep):
                 h = self.alpha * x + (1 - self.alpha) * self.nconv2(h, a)
@@ -354,7 +350,7 @@ class new_graph_constructor(nn.Module):
             output_data = self.out_conv(tc_output)
             adj = torch.sigmoid(output_data)
 
-            return adj.squeeze()
+            return adj.squeeze(-1)
 
         else:
             # Getting Spatial features
@@ -367,7 +363,7 @@ class new_graph_constructor(nn.Module):
 
             adj = torch.sigmoid(concated_data)
 
-            return adj.squeeze()
+            return adj.squeeze(-1)
 
 
 class graph_global(nn.Module):
