@@ -347,6 +347,12 @@ class new_graph_constructor(nn.Module):
             gate = torch.sigmoid(self.gate_convs[i](tc_input))
 
             tc_input = filter * gate
+            if self.residual_mode:
+                # __init__ 이 만들어 두고 한 번도 쓰지 않던 self.norm 을 배선한다.
+                # tanh*sigmoid 게이팅 3층을 정규화 없이 지나면 입력 신호가 기하급수로
+                # 감쇠해(실측: std 0.565 -> 0.011 -> 0.000000) dA 가 입력 무관 상수로
+                # 붕괴한다. residual_mode 에만 적용해 기존 설정의 재현성은 보존한다.
+                tc_input = self.norm[i](tc_input, torch.arange(self.nnodes, device=tc_input.device))
             tc_input = F.dropout(tc_input, self.dropout, training=self.training)
         tc_output = self.TC_summarize_conv(tc_input)
 
