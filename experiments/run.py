@@ -36,6 +36,11 @@ DATASETS = {
     # subgraph_size=5: 노드 30개에 기본 k=20 이면 정적 그래프가 거의 밀집이 된다(참 그래프는 부모 3개).
     "SYN-SWITCH": dict(num_nodes=30, adj="adj_syn_switch.pkl",
                        extra={"subgraph_size": 5}),
+    # 반마르코프 지속 레짐 6개 (make_switching_data.py --switching semimarkov).
+    # 레짐이 시계와 무관 -> feature 경로 우회 차단. oracle 검증: 창 기반 레짐 식별 87.9%,
+    # 동적 정보의 성능 가치 H3 +33.9% / H6 +14.2%. "성능 기여" 증명용 무대.
+    "SYN-REGIME": dict(num_nodes=30, adj="adj_syn_regime.pkl",
+                       extra={"subgraph_size": 5}),
 }
 
 # repo: "original" = 원본 MTGNN 저장소, "thesis" = 이 저장소(기여 버전)
